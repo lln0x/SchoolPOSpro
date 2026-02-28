@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-light: #eef2ff;
+}
+
+[data-theme='dark'] {
+  --bg-main: #0f172a;
+  --bg-card: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --primary: #6366f1;
+  --primary-hover: #818cf8;
+  --primary-light: #312e81;
+}
+
+[data-theme='celeste'] {
+  --bg-main: #f0f9ff;
+  --bg-card: #ffffff;
+  --text-main: #0c4a6e;
+  --text-muted: #0ea5e9;
+  --border-color: #bae6fd;
+  --primary: #0ea5e9;
+  --primary-hover: #0284c7;
+  --primary-light: #e0f2fe;
+}
+
+[data-theme='slate'] {
+  --bg-main: #f1f5f9;
+  --bg-card: #ffffff;
+  --text-main: #1e293b;
+  --text-muted: #475569;
+  --border-color: #cbd5e1;
+  --primary: #334155;
+  --primary-hover: #1e293b;
+  --primary-light: #f1f5f9;
+}
+
+[data-theme='emerald'] {
+  --bg-main: #f0fdf4;
+  --bg-card: #ffffff;
+  --text-main: #064e3b;
+  --text-muted: #10b981;
+  --border-color: #a7f3d0;
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-light: #d1fae5;
+}
+
+[data-theme='rose'] {
+  --bg-main: #fff1f2;
+  --bg-card: #ffffff;
+  --text-main: #881337;
+  --text-muted: #f43f5e;
+  --border-color: #fecdd3;
+  --primary: #f43f5e;
+  --primary-hover: #e11d48;
+  --primary-light: #ffe4e6;
+}
+
+[data-theme='amber'] {
+  --bg-main: #fffbeb;
+  --bg-card: #ffffff;
+  --text-main: #78350f;
+  --text-muted: #f59e0b;
+  --border-color: #fde68a;
+  --primary: #f59e0b;
+  --primary-hover: #d97706;
+  --primary-light: #fef3c7;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.bg-app-main { background-color: var(--bg-main); }
+.bg-app-card { background-color: var(--bg-card); }
+.text-app-main { color: var(--text-main); }
+.text-app-muted { color: var(--text-muted); }
+.border-app { border-color: var(--border-color); }
+.bg-app-primary { background-color: var(--primary); }
+.hover\:bg-app-primary-hover:hover { background-color: var(--primary-hover); }
+.bg-app-primary-light { background-color: var(--primary-light); }
+.text-app-primary { color: var(--primary); }
+.border-app-primary { border-color: var(--primary); }
