@@ -15,8 +15,9 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onActivate, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (key.length < 10) {
-      setError('La clave de producto debe tener al menos 10 caracteres');
+    const validKey = 'X7F2-9K4L-1M3N-8P6Q';
+    if (key !== validKey) {
+      setError('La clave de producto ingresada es incorrecta');
       return;
     }
     onActivate(key);
