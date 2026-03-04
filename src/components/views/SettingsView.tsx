@@ -35,8 +35,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [newUserSecurityQuestion, setNewUserSecurityQuestion] = useState('');
   const [newUserSecurityAnswer, setNewUserSecurityAnswer] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [resetPasswordMode, setResetPasswordMode] = useState(false);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
+
+  // Initialize owner data
+  React.useEffect(() => {
+    const owner = users.find(u => u.role === 'Admin') || users[0];
+    if (owner && !newUserName && !newUserUsername) {
+      setNewUserName(owner.name);
+      setNewUserUsername(owner.username);
+      setNewUserSecurityQuestion(owner.securityQuestion || '');
+    }
+  }, [users]);
 
   const THEMES: { id: ThemeType; label: string; color: string }[] = [
     { id: 'light', label: 'Claro', color: 'bg-white border-slate-200' },
@@ -62,10 +73,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     onAddUser({
-      id: `u-${Date.now()}`,
+      id: editingUser ? editingUser.id : `u-${Date.now()}`,
       name: newUserName,
       username: newUserUsername,
-      password: newUserPassword,
+      password: editingUser ? editingUser.password : newUserPassword,
       role: newUserRole,
       securityQuestion: newUserSecurityQuestion,
       securityAnswer: newUserSecurityAnswer.toLowerCase().trim()
@@ -75,6 +86,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setNewUserPassword('');
     setNewUserSecurityQuestion('');
     setNewUserSecurityAnswer('');
+    setEditingUser(null);
+    setIsEditModalOpen(false);
+  };
+
+  const openEditUser = (user: User) => {
+    setEditingUser(user);
+    setNewUserName(user.name);
+    setNewUserUsername(user.username);
+    setNewUserRole(user.role);
+    setNewUserSecurityQuestion(user.securityQuestion || '');
+    setNewUserSecurityAnswer('');
+    setIsEditModalOpen(true);
   };
 
   const handleResetPassword = (e: React.FormEvent) => {
@@ -106,7 +129,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="lg:col-span-1 flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
         {[
           { id: 'business', label: 'Empresa', icon: Settings },
-          { id: 'users', label: 'Usuarios', icon: Shield },
+          { id: 'users', label: 'Perfil del Dueño', icon: Shield },
           { id: 'appearance', label: 'Apariencia', icon: Palette },
           { id: 'data', label: 'Datos y Respaldo', icon: Download },
         ].map(tab => (
@@ -247,111 +270,82 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="space-y-6">
             <div className="bg-app-card rounded-3xl border border-app shadow-sm p-8">
               <h3 className="text-xl font-bold text-app-main mb-6 flex items-center gap-2">
-                <UserPlus size={24} className="text-app-primary" />
-                Agregar Nuevo Usuario
+                <Shield size={24} className="text-app-primary" />
+                Datos del Dueño / Administrador
               </h3>
-              <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input 
-                  required
-                  placeholder="Nombre Completo"
-                  value={newUserName}
-                  onChange={e => setNewUserName(e.target.value)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
-                />
-                <input 
-                  required
-                  placeholder="Usuario"
-                  value={newUserUsername}
-                  onChange={e => setNewUserUsername(e.target.value)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
-                />
-                <input 
-                  required
-                  type="password"
-                  placeholder="Contraseña"
-                  value={newUserPassword}
-                  onChange={e => setNewUserPassword(e.target.value)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
-                />
-                <select 
-                  value={newUserRole}
-                  onChange={e => setNewUserRole(e.target.value as UserRole)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-bold"
-                >
-                  <option value="Seller">Vendedor</option>
-                  <option value="Warehouse">Almacenero</option>
-                  <option value="Admin">Administrador</option>
-                </select>
-                <select 
-                  required
-                  value={newUserSecurityQuestion}
-                  onChange={e => setNewUserSecurityQuestion(e.target.value)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-medium text-sm"
-                >
-                  <option value="">Pregunta de Seguridad</option>
-                  {SECURITY_QUESTIONS.map((q, i) => (
-                    <option key={i} value={q}>{q}</option>
-                  ))}
-                </select>
-                <input 
-                  required
-                  placeholder="Respuesta de Seguridad"
-                  value={newUserSecurityAnswer}
-                  onChange={e => setNewUserSecurityAnswer(e.target.value)}
-                  className="px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
-                />
-                <button type="submit" className="md:col-span-2 py-4 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all">
-                  Crear Usuario
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const owner = users.find(u => u.role === 'Admin') || users[0];
+                if (owner) {
+                  onAddUser({
+                    ...owner,
+                    name: newUserName || owner.name,
+                    username: newUserUsername || owner.username,
+                    password: newUserPassword || owner.password,
+                    securityQuestion: newUserSecurityQuestion || owner.securityQuestion,
+                    securityAnswer: newUserSecurityAnswer ? newUserSecurityAnswer.toLowerCase().trim() : owner.securityAnswer
+                  });
+                  setNewUserPassword('');
+                  setNewUserSecurityAnswer('');
+                }
+              }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nombre del Dueño</label>
+                  <input 
+                    required
+                    placeholder="Nombre Completo"
+                    value={newUserName}
+                    onChange={e => setNewUserName(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Usuario de Acceso</label>
+                  <input 
+                    required
+                    placeholder="Usuario"
+                    value={newUserUsername}
+                    onChange={e => setNewUserUsername(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nueva Contraseña (Opcional)</label>
+                  <input 
+                    type="password"
+                    placeholder="Dejar en blanco para no cambiar"
+                    value={newUserPassword}
+                    onChange={e => setNewUserPassword(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Pregunta de Seguridad</label>
+                  <select 
+                    required
+                    value={newUserSecurityQuestion}
+                    onChange={e => setNewUserSecurityQuestion(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-medium text-sm"
+                  >
+                    <option value="">Pregunta de Seguridad</option>
+                    {SECURITY_QUESTIONS.map((q, i) => (
+                      <option key={i} value={q}>{q}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Respuesta de Seguridad (Opcional)</label>
+                  <input 
+                    placeholder="Dejar en blanco para no cambiar"
+                    value={newUserSecurityAnswer}
+                    onChange={e => setNewUserSecurityAnswer(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                  />
+                </div>
+                <button type="submit" className="md:col-span-2 py-4 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all flex items-center justify-center gap-2">
+                  <Save size={20} /> Guardar Cambios del Perfil
                 </button>
               </form>
-            </div>
-
-            <div className="bg-app-card rounded-3xl border border-app shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-app-main text-app-muted text-xs uppercase font-bold">
-                    <th className="px-6 py-4">Nombre</th>
-                    <th className="px-6 py-4">Usuario</th>
-                    <th className="px-6 py-4">Rol</th>
-                    <th className="px-6 py-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y border-app">
-                  {users.map(user => (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 font-bold text-app-main">{user.name}</td>
-                      <td className="px-6 py-4 text-app-muted">{user.username}</td>
-                      <td className="px-6 py-4">
-                        <span className={cn(
-                          "text-[10px] font-bold px-2 py-1 rounded-full uppercase",
-                          user.role === 'Admin' ? "bg-app-primary-light text-app-primary" :
-                          user.role === 'Warehouse' ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
-                        )}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => { setEditingUser(user); setResetPasswordMode(true); }}
-                            className="p-2 text-app-muted hover:text-app-primary"
-                            title="Cambiar Contraseña"
-                          >
-                            <Lock size={18} />
-                          </button>
-                          <button 
-                            onClick={() => onDeleteUser(user.id)}
-                            disabled={user.username === 'admin'}
-                            className="p-2 text-app-muted hover:text-rose-600 disabled:opacity-0"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
@@ -387,6 +381,82 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Cargar Archivo
                 <input type="file" className="hidden" accept=".json" onChange={handleRestoreFile} />
               </label>
+            </div>
+          </div>
+        )}
+
+        {isEditModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+            <div className="bg-app-card w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+              <div className="p-6 bg-app-primary text-white flex justify-between items-center">
+                <h3 className="text-xl font-bold">Editar Usuario</h3>
+                <button onClick={() => setIsEditModalOpen(false)} className="hover:bg-white/20 p-2 rounded-xl transition-all">
+                  <Plus className="rotate-45" size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleAddUser} className="p-8 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-app-muted uppercase ml-1">Nombre Completo</label>
+                    <input 
+                      required
+                      value={newUserName}
+                      onChange={e => setNewUserName(e.target.value)}
+                      className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-app-muted uppercase ml-1">Usuario</label>
+                    <input 
+                      required
+                      value={newUserUsername}
+                      onChange={e => setNewUserUsername(e.target.value)}
+                      className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-app-muted uppercase ml-1">Rol</label>
+                    <select 
+                      value={newUserRole}
+                      onChange={e => setNewUserRole(e.target.value as UserRole)}
+                      className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-bold"
+                    >
+                      <option value="Seller">Vendedor</option>
+                      <option value="Warehouse">Almacenero</option>
+                      <option value="Admin">Administrador</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-app-muted uppercase ml-1">Pregunta de Seguridad</label>
+                    <select 
+                      required
+                      value={newUserSecurityQuestion}
+                      onChange={e => setNewUserSecurityQuestion(e.target.value)}
+                      className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-medium text-sm"
+                    >
+                      <option value="">Pregunta de Seguridad</option>
+                      {SECURITY_QUESTIONS.map((q, i) => (
+                        <option key={i} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-xs font-bold text-app-muted uppercase ml-1">Respuesta de Seguridad (Opcional si no cambia)</label>
+                    <input 
+                      placeholder="Nueva respuesta si desea cambiarla"
+                      value={newUserSecurityAnswer}
+                      onChange={e => setNewUserSecurityAnswer(e.target.value)}
+                      className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    />
+                  </div>
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-app-primary text-white font-bold rounded-2xl shadow-lg shadow-app-primary/20 hover:bg-app-primary-hover transition-all mt-4"
+                >
+                  Actualizar Usuario
+                </button>
+              </form>
             </div>
           </div>
         )}

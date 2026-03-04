@@ -103,6 +103,29 @@ export default function App() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<Sale['paymentMethod']>('Cash');
 
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Navigation Shortcuts
+      if (e.key === 'F1') { e.preventDefault(); setActiveTab('dashboard'); }
+      if (e.key === 'F2') { e.preventDefault(); setActiveTab('pos'); }
+      if (e.key === 'F3') { e.preventDefault(); setActiveTab('inventory'); }
+      if (e.key === 'F4') { e.preventDefault(); setActiveTab('clients'); }
+      if (e.key === 'F5') { e.preventDefault(); setActiveTab('expenses'); }
+      if (e.key === 'F6') { e.preventDefault(); setActiveTab('partners'); }
+      if (e.key === 'F7') { e.preventDefault(); setActiveTab('history'); }
+      if (e.key === 'F8') { e.preventDefault(); setActiveTab('settings'); }
+      
+      // Theme Toggle
+      if (e.altKey && e.key === 't') {
+        setTheme(prev => prev === 'light' ? 'dark' : 'light');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Load Data
   useEffect(() => {
     const loadData = async () => {
@@ -680,6 +703,25 @@ export default function App() {
     const doc = new jsPDF();
     const pageWidth = 210;
     
+    // Filter data based on reportFilters
+    const filteredSales = sales.filter(s => {
+      const saleDate = new Date(s.date);
+      const start = reportFilters.startDate ? new Date(reportFilters.startDate) : null;
+      const end = reportFilters.endDate ? new Date(reportFilters.endDate + 'T23:59:59') : null;
+      return (!start || saleDate >= start) && (!end || saleDate <= end);
+    });
+
+    const filteredExpenses = expenses.filter(e => {
+      const expenseDate = new Date(e.date);
+      const start = reportFilters.startDate ? new Date(reportFilters.startDate) : null;
+      const end = reportFilters.endDate ? new Date(reportFilters.endDate + 'T23:59:59') : null;
+      return (!start || expenseDate >= start) && (!end || expenseDate <= end);
+    });
+
+    const reportRevenue = filteredSales.reduce((acc, s) => acc + s.total, 0);
+    const reportExpenses = filteredExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const reportNetProfit = reportRevenue - reportExpenses;
+
     // Header
     if (config.logo) {
       try {
@@ -696,20 +738,21 @@ export default function App() {
     doc.setFont('helvetica', 'normal');
     doc.text('Reporte Financiero General', pageWidth / 2, 30, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(`Fecha de Generación: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, pageWidth / 2, 38, { align: 'center' });
+    doc.text(`Periodo: ${reportFilters.startDate || 'Inicio'} al ${reportFilters.endDate || 'Hoy'}`, pageWidth / 2, 38, { align: 'center' });
+    doc.text(`Fecha de Generación: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, pageWidth / 2, 44, { align: 'center' });
 
     doc.setDrawColor(99, 102, 241);
     doc.setLineWidth(0.5);
-    doc.line(10, 45, 200, 45);
+    doc.line(10, 50, 200, 50);
 
     // Summary Table
     autoTable(doc, {
-      startY: 55,
+      startY: 60,
       head: [['Concepto', 'Monto']],
       body: [
-        ['Total Ingresos (Ventas)', formatCurrency(stats.totalRevenue)],
-        ['Total Egresos (Gastos)', formatCurrency(stats.totalExpenses)],
-        ['Balance Neto (Ganancia Real)', formatCurrency(stats.netProfit)]
+        ['Total Ingresos (Ventas)', formatCurrency(reportRevenue)],
+        ['Total Egresos (Gastos)', formatCurrency(reportExpenses)],
+        ['Balance Neto (Ganancia Real)', formatCurrency(reportNetProfit)]
       ],
       theme: 'striped',
       headStyles: { fillColor: [99, 102, 241], textColor: 255 },
@@ -728,7 +771,7 @@ export default function App() {
       const partnerData = partners.map(p => [
         p.name,
         `${p.percentage}%`,
-        formatCurrency((stats.netProfit * p.percentage) / 100)
+        formatCurrency((reportNetProfit * p.percentage) / 100)
       ]);
 
       autoTable(doc, {
@@ -749,6 +792,11 @@ export default function App() {
     clientId: '',
     startDate: '',
     endDate: ''
+  });
+
+  const [reportFilters, setReportFilters] = useState({ 
+    startDate: format(new Date(), 'yyyy-MM-01'), 
+    endDate: format(new Date(), 'yyyy-MM-dd') 
   });
 
   const handleAddCategory = (category: Category) => {
@@ -857,12 +905,9 @@ export default function App() {
                 <p className="text-sm font-bold text-app-main">{currentUser.name}</p>
                 <p className="text-[10px] font-bold text-app-primary uppercase tracking-widest">{currentUser.role}</p>
               </div>
-              <button 
-                onClick={() => setCurrentUser(null)}
-                className="w-10 h-10 bg-app-main rounded-full border-2 border-app shadow-sm overflow-hidden hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center justify-center"
-              >
-                <LogOut size={18} />
-              </button>
+              <div className="w-10 h-10 bg-app-primary text-white rounded-full border-2 border-app shadow-sm flex items-center justify-center font-black">
+                {currentUser.name.charAt(0)}
+              </div>
             </div>
           </div>
         </header>
@@ -942,6 +987,41 @@ export default function App() {
                       </div>
                       
                       <div className="bg-app-card p-6 rounded-2xl border border-app shadow-sm">
+                        <h3 className="text-lg font-bold text-app-main mb-4 flex items-center gap-2">
+                          <Download size={20} className="text-app-primary" />
+                          Reporte Financiero General
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-app-muted uppercase ml-1">Desde</label>
+                              <input 
+                                type="date" 
+                                value={reportFilters.startDate}
+                                onChange={e => setReportFilters({...reportFilters, startDate: e.target.value})}
+                                className="w-full px-3 py-2 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-app-muted uppercase ml-1">Hasta</label>
+                              <input 
+                                type="date" 
+                                value={reportFilters.endDate}
+                                onChange={e => setReportFilters({...reportFilters, endDate: e.target.value})}
+                                className="w-full px-3 py-2 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all text-xs"
+                              />
+                            </div>
+                          </div>
+                          <button 
+                            onClick={generateFinancialReportPDF}
+                            className="w-full py-3 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-app-primary/10"
+                          >
+                            <Download size={18} /> Generar Reporte PDF
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-app-card p-6 rounded-2xl border border-app shadow-sm">
                         <h3 className="text-lg font-bold text-app-main mb-4">Resumen de Operaciones</h3>
                         <div className="space-y-3">
                           <div className="flex justify-between text-sm">
@@ -973,6 +1053,7 @@ export default function App() {
                   cartTax={cartTax}
                   cartTotal={cartTotal}
                   clients={clients}
+                  onAddClient={(c) => setClients(prev => [...prev, c])}
                   selectedClient={selectedClient}
                   setSelectedClient={setSelectedClient}
                   checkMonthlyFeePaid={checkMonthlyFeePaid}
@@ -1007,6 +1088,8 @@ export default function App() {
                   onAddExpense={(e) => setExpenses(prev => [...prev, e])}
                   onDeleteExpense={(id) => setExpenses(prev => prev.filter(item => item.id !== id))}
                   onGenerateReport={generateFinancialReportPDF}
+                  reportFilters={reportFilters}
+                  setReportFilters={setReportFilters}
                 />
               )}
               {activeTab === 'partners' && (
@@ -1117,13 +1200,19 @@ export default function App() {
                   config={config}
                   setConfig={setConfig}
                   users={users}
-                  onAddUser={(u) => setUsers(prev => {
-                    const exists = prev.find(user => user.id === u.id);
-                    if (exists) {
-                      return prev.map(user => user.id === u.id ? u : user);
+                  onAddUser={(u) => {
+                    setUsers(prev => {
+                      const exists = prev.find(user => user.id === u.id);
+                      if (exists) {
+                        return prev.map(user => user.id === u.id ? u : user);
+                      }
+                      return [...prev, u];
+                    });
+                    // Update current user if it's the one being edited
+                    if (currentUser && currentUser.id === u.id) {
+                      setCurrentUser(u);
                     }
-                    return [...prev, u];
-                  })}
+                  }}
                   onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
                   onBackup={handleBackup}
                   onRestore={handleRestore}

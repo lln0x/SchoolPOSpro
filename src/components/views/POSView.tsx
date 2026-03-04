@@ -17,6 +17,7 @@ interface POSViewProps {
   cartTax: number;
   cartTotal: number;
   clients: Client[];
+  onAddClient: (client: Client) => void;
   selectedClient: Client | null;
   setSelectedClient: (client: Client | null) => void;
   checkMonthlyFeePaid: (clientId: string, productId: string, month: string, year: number) => boolean;
@@ -43,6 +44,7 @@ export const POSView: React.FC<POSViewProps> = ({
   cartTax,
   cartTotal,
   clients,
+  onAddClient,
   selectedClient,
   setSelectedClient,
   checkMonthlyFeePaid,
@@ -52,6 +54,10 @@ export const POSView: React.FC<POSViewProps> = ({
 }) => {
   const [feeModalProduct, setFeeModalProduct] = useState<Product | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [clientSearchDni, setClientSearchDni] = useState('');
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<'80mm' | '58mm' | 'A4'>('80mm');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
@@ -193,6 +199,60 @@ export const POSView: React.FC<POSViewProps> = ({
     setIsCheckoutModalOpen(false);
     setPaymentAmount(0);
   };
+
+  const handleClientSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const found = clients.find(c => c.document === clientSearchDni);
+    if (found) {
+      setSelectedClient(found);
+      setClientSearchDni('');
+      addNotification('Cliente Encontrado', `Se ha seleccionado a ${found.name}`, 'success');
+    } else {
+      setIsClientModalOpen(true);
+    }
+  };
+
+  const handleRegisterClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newClient: Client = {
+      id: `c-${Date.now()}`,
+      name: newClientName,
+      document: clientSearchDni,
+      phone: newClientPhone,
+      email: '',
+      address: ''
+    };
+    onAddClient(newClient);
+    setSelectedClient(newClient);
+    setIsClientModalOpen(false);
+    setNewClientName('');
+    setNewClientPhone('');
+    setClientSearchDni('');
+    addNotification('Cliente Registrado', `Se ha registrado y seleccionado a ${newClient.name}`, 'success');
+    // Note: In a real app, this should be persisted to the backend/state.
+  };
+
+  // Keyboard Shortcuts for POS
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === 'c') {
+        e.preventDefault();
+        document.getElementById('client-search-input')?.focus();
+      }
+      if (e.altKey && e.key === 'p') {
+        e.preventDefault();
+        document.getElementById('product-search-input')?.focus();
+      }
+      if (e.altKey && e.key === 'Enter' && cart.length > 0) {
+        e.preventDefault();
+        setPaymentAmount(cartTotal);
+        setIsCheckoutModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart.length, cartTotal]);
 
   const addToCart = (product: Product) => {
     if (product.isCombo) {
@@ -368,32 +428,37 @@ export const POSView: React.FC<POSViewProps> = ({
           activeMobileTab !== 'products' && "hidden lg:flex"
         )}>
           <div className="bg-app-card rounded-2xl border border-app shadow-sm p-4 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-app-muted" size={20} />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre o código..."
-              className="w-full pl-10 pr-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-app-muted" size={20} />
+              <input 
+                id="product-search-input"
+                type="text" 
+                placeholder="Buscar producto (Alt+P)..."
+                className="w-full pl-10 pr-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <form onSubmit={handleClientSearch} className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-app-muted" size={20} />
+              <input 
+                id="client-search-input"
+                type="text" 
+                placeholder="Buscar DNI Cliente (Alt+C)..."
+                className="w-full pl-10 pr-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                value={clientSearchDni}
+                onChange={(e) => setClientSearchDni(e.target.value)}
+              />
+              {selectedClient && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-app-primary/10 px-2 py-1 rounded-lg border border-app-primary/20">
+                  <span className="text-[10px] font-bold text-app-primary truncate max-w-[100px]">{selectedClient.name}</span>
+                  <button type="button" onClick={() => setSelectedClient(null)} className="text-app-primary hover:text-rose-500">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
+            </form>
           </div>
-          <div className="flex-1">
-            <select 
-              className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-bold text-app-main"
-              value={selectedClient?.id || ''}
-              onChange={(e) => {
-                const client = clients.find(c => c.id === e.target.value);
-                setSelectedClient(client || null);
-              }}
-            >
-              <option value="">Seleccionar Cliente (Opcional)</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name} - {c.document}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button
@@ -505,39 +570,47 @@ export const POSView: React.FC<POSViewProps> = ({
               <p>El carrito está vacío</p>
             </div>
           ) : (
-            cart.map(item => {
-              const uniqueId = item.id + (item.feeDetails ? `-${item.feeDetails.month}-${item.feeDetails.year}` : '');
-              return (
-                <div key={uniqueId} className="flex items-center gap-3 p-2 rounded-xl hover:bg-app-main transition-colors">
-                  <div className="flex-1">
-                    <h5 className="text-sm font-bold text-app-main leading-tight">{item.name}</h5>
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] font-bold text-app-muted">{config.currency}</span>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        value={item.price ?? ''}
-                        onChange={(e) => updatePrice(uniqueId, parseFloat(e.target.value) || 0)}
-                        className="text-xs font-black text-app-primary bg-transparent border-b border-dashed border-app-primary/30 w-16 focus:outline-none focus:border-app-primary"
-                      />
+            <AnimatePresence initial={false}>
+              {cart.map(item => {
+                const uniqueId = item.id + (item.feeDetails ? `-${item.feeDetails.month}-${item.feeDetails.year}` : '');
+                return (
+                  <motion.div 
+                    key={uniqueId}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-app-main transition-colors"
+                  >
+                    <div className="flex-1">
+                      <h5 className="text-sm font-bold text-app-main leading-tight">{item.name}</h5>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[10px] font-bold text-app-muted">{config.currency}</span>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          value={item.price ?? ''}
+                          onChange={(e) => updatePrice(uniqueId, parseFloat(e.target.value) || 0)}
+                          className="text-xs font-black text-app-primary bg-transparent border-b border-dashed border-app-primary/30 w-16 focus:outline-none focus:border-app-primary"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 bg-app-main rounded-lg p-1">
-                    <button onClick={() => updateQuantity(uniqueId, -1)} className="p-1 hover:bg-app-card rounded-md transition-colors">
-                      <Minus size={14} />
-                    </button>
-                    <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(uniqueId, 1)} className="p-1 hover:bg-app-card rounded-md transition-colors">
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                  <div className="text-right min-w-[60px]">
-                    <p className="text-sm font-bold text-app-main">{formatCurrency(item.price * item.quantity)}</p>
-                    <button onClick={() => removeFromCart(uniqueId)} className="text-[10px] text-rose-500 hover:underline">Eliminar</button>
-                  </div>
-                </div>
-              );
-            })
+                    <div className="flex items-center gap-2 bg-app-main rounded-lg p-1">
+                      <button onClick={() => updateQuantity(uniqueId, -1)} className="p-1 hover:bg-app-card rounded-md transition-colors">
+                        <Minus size={14} />
+                      </button>
+                      <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(uniqueId, 1)} className="p-1 hover:bg-app-card rounded-md transition-colors">
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <div className="text-right min-w-[60px]">
+                      <p className="text-sm font-bold text-app-main">{formatCurrency(item.price * item.quantity)}</p>
+                      <button onClick={() => removeFromCart(uniqueId)} className="text-[10px] text-rose-500 hover:underline">Eliminar</button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           )}
         </div>
 
@@ -579,7 +652,11 @@ export const POSView: React.FC<POSViewProps> = ({
             ))}
           </div>
 
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            animate={cart.length > 0 ? { scale: [1, 1.01, 1] } : {}}
+            transition={{ repeat: Infinity, duration: 2 }}
             className="w-full py-4 bg-app-primary text-white font-bold rounded-xl shadow-lg shadow-app-primary/20 hover:bg-app-primary-hover active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none" 
             disabled={cart.length === 0}
             onClick={() => {
@@ -588,7 +665,7 @@ export const POSView: React.FC<POSViewProps> = ({
             }}
           >
             Cobrar {formatCurrency(cartTotal)}
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>
@@ -772,6 +849,58 @@ export const POSView: React.FC<POSViewProps> = ({
                   Confirmar Selección
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isClientModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-app-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 bg-app-primary text-white flex justify-between items-center">
+                <h3 className="text-xl font-bold">Registrar Nuevo Cliente</h3>
+                <button onClick={() => setIsClientModalOpen(false)} className="hover:bg-white/20 p-2 rounded-xl transition-all">
+                  <Plus className="rotate-45" size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleRegisterClient} className="p-8 space-y-4">
+                <p className="text-sm text-app-muted">El DNI <span className="font-bold text-app-main">{clientSearchDni}</span> no está registrado. Ingrese el nombre para continuar.</p>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nombre Completo</label>
+                  <input 
+                    required
+                    autoFocus
+                    type="text" 
+                    value={newClientName}
+                    onChange={e => setNewClientName(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    placeholder="Ej. Juan Pérez"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Número de Celular</label>
+                  <input 
+                    required
+                    type="tel" 
+                    value={newClientPhone}
+                    onChange={e => setNewClientPhone(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    placeholder="Ej. 987654321"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-app-primary text-white font-bold rounded-2xl shadow-lg shadow-app-primary/20 hover:bg-app-primary-hover transition-all mt-4"
+                >
+                  Registrar y Seleccionar
+                </button>
+              </form>
             </motion.div>
           </div>
         )}
