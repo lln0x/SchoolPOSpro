@@ -10,10 +10,12 @@ interface NotificationProps {
 }
 
 export const Notifications: React.FC<NotificationProps> = ({ notifications, onDismiss }) => {
+  const activeNotifications = notifications.filter(n => !n.toastDismissed);
+  
   return (
     <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 w-80 pointer-events-none">
       <AnimatePresence>
-        {notifications.map((notif) => (
+        {activeNotifications.map((notif) => (
           <NotificationItem key={notif.id} notification={notif} onDismiss={onDismiss} />
         ))}
       </AnimatePresence>

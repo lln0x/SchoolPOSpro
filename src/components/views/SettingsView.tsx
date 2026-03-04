@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, Download, Upload, UserPlus, Shield, Trash2, Image as ImageIcon, Palette, Lock, Plus } from 'lucide-react';
+import { Settings, Save, Download, Upload, UserPlus, Shield, Trash2, Image as ImageIcon, Palette, Lock, Plus, Printer } from 'lucide-react';
 import { BusinessConfig, User, UserRole, ThemeType } from '../../types';
 import { cn } from '../../lib/utils';
 import { SECURITY_QUESTIONS } from '../../constants';
@@ -8,6 +8,7 @@ interface SettingsViewProps {
   config: BusinessConfig;
   setConfig: (config: BusinessConfig) => void;
   users: User[];
+  currentUser: User;
   onAddUser: (user: User) => void;
   onDeleteUser: (id: string) => void;
   onBackup: () => void;
@@ -20,6 +21,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   config,
   setConfig,
   users,
+  currentUser,
   onAddUser,
   onDeleteUser,
   onBackup,
@@ -27,8 +29,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   theme,
   setTheme
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'business' | 'users' | 'data' | 'appearance'>('business');
+  const [activeSubTab, setActiveSubTab] = useState<'business' | 'users' | 'data' | 'appearance' | 'ticket'>('business');
   const [newUserName, setNewUserName] = useState('');
+  const [newUserLastName, setNewUserLastName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('');
+  const [newUserAvatar, setNewUserAvatar] = useState('');
   const [newUserUsername, setNewUserUsername] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('Seller');
@@ -39,15 +45,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [resetPasswordMode, setResetPasswordMode] = useState(false);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
 
+  // Keyboard Shortcuts
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEditModalOpen(false);
+        setResetPasswordMode(false);
+        setEditingUser(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Initialize owner data
   React.useEffect(() => {
-    const owner = users.find(u => u.role === 'Admin') || users[0];
+    const owner = users.find(u => u.role === 'Admin') || currentUser;
     if (owner && !newUserName && !newUserUsername) {
       setNewUserName(owner.name);
+      setNewUserLastName(owner.lastName || '');
+      setNewUserEmail(owner.email || '');
+      setNewUserPhone(owner.phone || '');
+      setNewUserAvatar(owner.avatar || '');
       setNewUserUsername(owner.username);
       setNewUserSecurityQuestion(owner.securityQuestion || '');
     }
-  }, [users]);
+  }, [users, currentUser]);
 
   const THEMES: { id: ThemeType; label: string; color: string }[] = [
     { id: 'light', label: 'Claro', color: 'bg-white border-slate-200' },
@@ -65,6 +88,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setConfig({ ...config, logo: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewUserAvatar(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -129,7 +163,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="lg:col-span-1 flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
         {[
           { id: 'business', label: 'Empresa', icon: Settings },
-          { id: 'users', label: 'Perfil del Dueño', icon: Shield },
+          { id: 'users', label: 'PERFIL', icon: Shield },
+          { id: 'ticket', label: 'Ticket', icon: Printer },
           { id: 'appearance', label: 'Apariencia', icon: Palette },
           { id: 'data', label: 'Datos y Respaldo', icon: Download },
         ].map(tab => (
@@ -180,6 +215,165 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === 'ticket' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-app-card rounded-3xl border border-app shadow-sm p-8 space-y-8">
+              <div>
+                <h3 className="text-xl font-bold text-app-main">Configuración de Ticket</h3>
+                <p className="text-sm text-app-muted">Personaliza la apariencia de tus comprobantes de pago</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2 flex items-center justify-between p-4 bg-app-main rounded-xl border border-app">
+                  <div>
+                    <h4 className="text-sm font-bold text-app-main">Mostrar Logo en Ticket</h4>
+                    <p className="text-[10px] text-app-muted">Activar para incluir el logo de la empresa en la parte superior</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setConfig({
+                      ...config, 
+                      ticketSettings: { 
+                        ...config.ticketSettings!, 
+                        showLogo: !config.ticketSettings?.showLogo 
+                      }
+                    })}
+                    className={cn(
+                      "w-12 h-6 rounded-full transition-all relative",
+                      config.ticketSettings?.showLogo ? "bg-app-primary" : "bg-slate-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                      config.ticketSettings?.showLogo ? "right-1" : "left-1"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Tamaño del Logo (mm)</label>
+                  <input 
+                    type="number" 
+                    value={config.ticketSettings?.logoSize || 20}
+                    onChange={e => setConfig({
+                      ...config, 
+                      ticketSettings: { 
+                        ...config.ticketSettings!, 
+                        logoSize: parseInt(e.target.value) || 20 
+                      }
+                    })}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Encabezado del Ticket</label>
+                  <input 
+                    type="text" 
+                    value={config.ticketSettings?.headerText || ''}
+                    onChange={e => setConfig({
+                      ...config, 
+                      ticketSettings: { 
+                        ...config.ticketSettings!, 
+                        headerText: e.target.value 
+                      }
+                    })}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
+                    placeholder="Ej. COMPROBANTE DE PAGO"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Pie de Página (Mensaje)</label>
+                  <textarea 
+                    value={config.ticketSettings?.footerText || ''}
+                    onChange={e => setConfig({
+                      ...config, 
+                      ticketSettings: { 
+                        ...config.ticketSettings!, 
+                        footerText: e.target.value 
+                      }
+                    })}
+                    rows={3}
+                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all resize-none"
+                    placeholder="Ej. ¡Gracias por su compra! Vuelva pronto."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-app-muted uppercase ml-1">Vista Previa (80mm)</h4>
+              <div className="bg-white p-6 rounded-xl shadow-inner border border-slate-200 text-slate-800 font-mono text-[10px] space-y-4 min-h-[400px]">
+                {/* Simulated Ticket Content */}
+                <div className="text-center space-y-1">
+                  {config.ticketSettings?.showLogo && config.logo && (
+                    <div className="flex justify-center mb-2">
+                      <img 
+                        src={config.logo} 
+                        alt="Logo Preview" 
+                        style={{ width: `${config.ticketSettings.logoSize}mm` }}
+                        className="object-contain"
+                      />
+                    </div>
+                  )}
+                  <p className="font-bold text-sm uppercase">{config.name}</p>
+                  <p>RUC: {config.ruc}</p>
+                  <p className="max-w-[150px] mx-auto">{config.address}</p>
+                  <p>Tel: {config.phone}</p>
+                </div>
+
+                <div className="text-center border-y border-dashed border-slate-300 py-2 my-2">
+                  <p className="font-bold">{config.ticketSettings?.headerText || 'TICKET DE VENTA'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p>Nro: SALE-123456789</p>
+                  <p>Fecha: 04/03/2026 15:30</p>
+                  <p>Cliente: Consumidor Final</p>
+                </div>
+
+                <div className="border-b border-dashed border-slate-300 pb-1">
+                  <div className="flex justify-between font-bold">
+                    <span>CANT DESCRIPCIÓN</span>
+                    <span>TOTAL</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span>2 x Producto Ejemplo A</span>
+                    <span>S/ 40.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>1 x Servicio Ejemplo B</span>
+                    <span>S/ 15.00</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="font-bold">SUBTOTAL:</span>
+                    <span>S/ 46.61</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold">IGV (18%):</span>
+                    <span>S/ 8.39</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-black pt-1">
+                    <span>TOTAL:</span>
+                    <span>S/ 55.00</span>
+                  </div>
+                </div>
+
+                <div className="text-center pt-4 italic">
+                  <p className="whitespace-pre-wrap">{config.ticketSettings?.footerText || '¡Gracias por su compra!'}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -269,81 +463,87 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {activeSubTab === 'users' && (
           <div className="space-y-6">
             <div className="bg-app-card rounded-3xl border border-app shadow-sm p-8">
-              <h3 className="text-xl font-bold text-app-main mb-6 flex items-center gap-2">
-                <Shield size={24} className="text-app-primary" />
-                Datos del Dueño / Administrador
-              </h3>
+              <div className="flex items-center gap-6 mb-8">
+                <div className="relative group">
+                  <div className="w-24 h-24 bg-app-main rounded-full flex items-center justify-center text-app-muted overflow-hidden border-2 border-dashed border-app group-hover:border-app-primary transition-all">
+                    {newUserAvatar ? (
+                      <img src={newUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon size={32} />
+                    )}
+                  </div>
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 cursor-pointer rounded-full transition-all">
+                    <Upload size={20} />
+                    <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                  </label>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-app-main">Perfil del Usuario</h3>
+                  <p className="text-sm text-app-muted">Gestiona tu información personal y foto de perfil</p>
+                </div>
+              </div>
+
               <form onSubmit={(e) => {
                 e.preventDefault();
-                const owner = users.find(u => u.role === 'Admin') || users[0];
-                if (owner) {
-                  onAddUser({
-                    ...owner,
-                    name: newUserName || owner.name,
-                    username: newUserUsername || owner.username,
-                    password: newUserPassword || owner.password,
-                    securityQuestion: newUserSecurityQuestion || owner.securityQuestion,
-                    securityAnswer: newUserSecurityAnswer ? newUserSecurityAnswer.toLowerCase().trim() : owner.securityAnswer
-                  });
-                  setNewUserPassword('');
-                  setNewUserSecurityAnswer('');
-                }
+                const owner = users.find(u => u.role === 'Admin') || currentUser;
+                onAddUser({
+                  ...owner,
+                  name: newUserName,
+                  lastName: newUserLastName,
+                  email: newUserEmail,
+                  phone: newUserPhone,
+                  avatar: newUserAvatar,
+                  username: newUserUsername || owner.username,
+                  password: newUserPassword || owner.password,
+                  securityQuestion: newUserSecurityQuestion || owner.securityQuestion,
+                  securityAnswer: newUserSecurityAnswer ? newUserSecurityAnswer.toLowerCase().trim() : owner.securityAnswer
+                });
+                setNewUserPassword('');
+                setNewUserSecurityAnswer('');
               }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nombre del Dueño</label>
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nombres</label>
                   <input 
                     required
-                    placeholder="Nombre Completo"
+                    placeholder="Tus nombres"
                     value={newUserName}
                     onChange={e => setNewUserName(e.target.value)}
                     className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Usuario de Acceso</label>
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Apellidos</label>
                   <input 
                     required
-                    placeholder="Usuario"
-                    value={newUserUsername}
-                    onChange={e => setNewUserUsername(e.target.value)}
+                    placeholder="Tus apellidos"
+                    value={newUserLastName}
+                    onChange={e => setNewUserLastName(e.target.value)}
                     className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Nueva Contraseña (Opcional)</label>
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Correo Electrónico</label>
                   <input 
-                    type="password"
-                    placeholder="Dejar en blanco para no cambiar"
-                    value={newUserPassword}
-                    onChange={e => setNewUserPassword(e.target.value)}
+                    required
+                    type="email"
+                    placeholder="ejemplo@correo.com"
+                    value={newUserEmail}
+                    onChange={e => setNewUserEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Pregunta de Seguridad</label>
-                  <select 
-                    required
-                    value={newUserSecurityQuestion}
-                    onChange={e => setNewUserSecurityQuestion(e.target.value)}
-                    className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all font-medium text-sm"
-                  >
-                    <option value="">Pregunta de Seguridad</option>
-                    {SECURITY_QUESTIONS.map((q, i) => (
-                      <option key={i} value={q}>{q}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Respuesta de Seguridad (Opcional)</label>
+                  <label className="text-xs font-bold text-app-muted uppercase ml-1">Celular (Opcional)</label>
                   <input 
-                    placeholder="Dejar en blanco para no cambiar"
-                    value={newUserSecurityAnswer}
-                    onChange={e => setNewUserSecurityAnswer(e.target.value)}
+                    placeholder="Número de celular"
+                    value={newUserPhone}
+                    onChange={e => setNewUserPhone(e.target.value)}
                     className="w-full px-4 py-3 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all"
                   />
                 </div>
+                
                 <button type="submit" className="md:col-span-2 py-4 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all flex items-center justify-center gap-2">
-                  <Save size={20} /> Guardar Cambios del Perfil
+                  Guardar
                 </button>
               </form>
             </div>

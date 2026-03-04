@@ -43,7 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'pos', icon: ShoppingCart, label: 'Punto de Venta', roles: ['Admin', 'Seller'] },
     { id: 'inventory', icon: Package, label: 'Inventario', roles: ['Admin', 'Warehouse'] },
     { id: 'clients', icon: Users, label: 'Clientes', roles: ['Admin', 'Seller'] },
-    { id: 'expenses', icon: Wallet, label: 'Egresos', roles: ['Admin'] },
     { id: 'partners', icon: UserPlus, label: 'Socios', roles: ['Admin'] },
     { id: 'history', icon: HistoryIcon, label: 'Historial', roles: ['Admin', 'Seller'] },
     { id: 'settings', icon: Settings, label: 'Configuración', roles: ['Admin'] },

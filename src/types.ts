@@ -28,6 +28,10 @@ export interface User {
   password?: string;
   role: UserRole;
   name: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
   securityQuestion?: string;
   securityAnswer?: string;
 }
@@ -94,6 +98,12 @@ export interface BusinessConfig {
   currency: string;
   logo?: string;
   enableTax: boolean;
+  ticketSettings?: {
+    logoSize: number;
+    footerText: string;
+    headerText: string;
+    showLogo: boolean;
+  };
 }
 
 export interface Notification {
@@ -102,6 +112,8 @@ export interface Notification {
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
   timestamp: number;
+  system?: boolean;
+  toastDismissed?: boolean;
 }
 
 export interface ActivationStatus {

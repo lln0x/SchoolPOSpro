@@ -17,7 +17,9 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Users2,
-  Menu
+  Menu,
+  Plus,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -63,7 +65,11 @@ export default function App() {
     id: 'admin-001',
     username: 'admin',
     role: 'Admin',
-    name: 'Administrador'
+    name: 'Administrador',
+    lastName: '',
+    email: '',
+    phone: '',
+    avatar: ''
   });
   const [isAdminRegistered, setIsAdminRegistered] = useState(true);
   const [theme, setTheme] = useState<ThemeType>('light');
@@ -88,13 +94,22 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isExpensesModalOpen, setIsExpensesModalOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [config, setConfig] = useState<BusinessConfig>({
     name: 'NEXUS POS',
     ruc: '20123456789',
     address: 'Av. Educativa 123, Lima',
     phone: '987 654 321',
     currency: 'S/',
-    enableTax: true
+    enableTax: true,
+    ticketSettings: {
+      logoSize: 20,
+      footerText: '¡Gracias por su preferencia!',
+      headerText: 'COMPROBANTE DE PAGO',
+      showLogo: true
+    }
   });
 
   // POS State
@@ -119,6 +134,12 @@ export default function App() {
       // Theme Toggle
       if (e.altKey && e.key === 't') {
         setTheme(prev => prev === 'light' ? 'dark' : 'light');
+      }
+
+      // Esc: Close modals
+      if (e.key === 'Escape') {
+        setIsExpensesModalOpen(false);
+        setIsInfoModalOpen(false);
       }
     };
 
@@ -198,19 +219,27 @@ export default function App() {
   }, [theme]);
 
   // Notifications Logic
-  const addNotification = useCallback((title: string, message: string, type: Notification['type'] = 'info') => {
+  const addNotification = useCallback((title: string, message: string, type: Notification['type'] = 'info', system: boolean = false) => {
     const newNotif: Notification = {
-      id: `n-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: system ? `sys-${title}` : `n-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title,
       message,
       type,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      system
     };
-    setNotifications(prev => [newNotif, ...prev]);
+    setNotifications(prev => {
+      // If it's a system notification, replace the existing one with the same title to avoid duplicates
+      if (system) {
+        const filtered = prev.filter(n => n.id !== newNotif.id);
+        return [newNotif, ...filtered];
+      }
+      return [newNotif, ...prev];
+    });
   }, []);
 
   const dismissNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, toastDismissed: true } : n));
   }, []);
 
   const checkMonthlyFeePaid = (clientId: string, productId: string, month: string, year: number) => {
@@ -224,17 +253,91 @@ export default function App() {
     );
   };
 
-  // Check Stock Notifications
+  // Check Stock & Combo Notifications
   useEffect(() => {
+    const today = new Date();
     const lowStock = products.filter(p => !p.isService && p.stock < p.minStock);
-    if (lowStock.length > 0) {
-      addNotification(
-        'Alerta de Inventario', 
-        `Hay ${lowStock.length} productos con stock bajo.`, 
-        'warning'
-      );
-    }
-  }, [products, addNotification]);
+    
+    // Check combos for expiration and missing items
+    const expiringCombos = products.filter(p => 
+      p.isCombo && 
+      p.comboEndDate && 
+      new Date(p.comboEndDate).getTime() - today.getTime() < 3 * 24 * 60 * 60 * 1000 && // 3 days
+      new Date(p.comboEndDate).getTime() > today.getTime()
+    );
+
+    const incompleteCombos = products.filter(p => {
+      if (!p.isCombo || !p.comboItems) return false;
+      return p.comboItems.some(itemId => {
+        const item = products.find(prod => prod.id === itemId);
+        return item && !item.isService && item.stock <= 0;
+      });
+    });
+
+    // Update notifications based on current state
+    setNotifications(prev => {
+      let next = [...prev];
+      
+      // Handle Low Stock
+      if (lowStock.length > 0) {
+        const title = 'Alerta de Inventario';
+        const msg = `Hay ${lowStock.length} productos con stock bajo: ${lowStock.slice(0, 2).map(p => p.name).join(', ')}${lowStock.length > 2 ? '...' : ''}`;
+        const existing = next.find(n => n.id === `sys-${title}`);
+        if (!existing || existing.message !== msg) {
+          next = [{
+            id: `sys-${title}`,
+            title,
+            message: msg,
+            type: 'warning',
+            timestamp: existing?.timestamp || Date.now(),
+            system: true
+          }, ...next.filter(n => n.id !== `sys-${title}`)];
+        }
+      } else {
+        next = next.filter(n => n.id !== 'sys-Alerta de Inventario');
+      }
+
+      // Handle Expiring Combos
+      if (expiringCombos.length > 0) {
+        const title = 'Combos por Vencer';
+        const msg = `Hay ${expiringCombos.length} combos que vencen pronto.`;
+        const existing = next.find(n => n.id === `sys-${title}`);
+        if (!existing) {
+          next = [{
+            id: `sys-${title}`,
+            title,
+            message: msg,
+            type: 'info',
+            timestamp: Date.now(),
+            system: true
+          }, ...next];
+        }
+      } else {
+        next = next.filter(n => n.id !== 'sys-Combos por Vencer');
+      }
+
+      // Handle Incomplete Combos
+      if (incompleteCombos.length > 0) {
+        const title = 'Combos Incompletos';
+        const msg = `Hay ${incompleteCombos.length} combos con productos agotados.`;
+        const existing = next.find(n => n.id === `sys-${title}`);
+        if (!existing) {
+          next = [{
+            id: `sys-${title}`,
+            title,
+            message: msg,
+            type: 'error',
+            timestamp: Date.now(),
+            system: true
+          }, ...next];
+        }
+      } else {
+        next = next.filter(n => n.id !== 'sys-Combos Incompletos');
+      }
+
+      return next;
+    });
+  }, [products.map(p => p.stock).join(','), products.map(p => p.id).join(','), addNotification]);
 
   // Calculations
   const cartSubtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
@@ -372,6 +475,17 @@ export default function App() {
 
     // --- Header Section ---
     if (isThermal) {
+      // Logo
+      if (config.ticketSettings?.showLogo && config.logo) {
+        const logoSize = config.ticketSettings.logoSize || 20;
+        try {
+          doc.addImage(config.logo, 'PNG', centerX - (logoSize / 2), y, logoSize, logoSize);
+          y += logoSize + 5;
+        } catch (e) {
+          console.error("Error adding logo to ticket", e);
+        }
+      }
+
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text(config.name, centerX, y, { align: 'center' });
@@ -382,11 +496,13 @@ export default function App() {
       doc.text(`RUC: ${config.ruc}`, centerX, y, { align: 'center' });
       y += 4;
       doc.text(config.address, centerX, y, { align: 'center', maxWidth: pageWidth - 10 });
+      y += 4;
+      doc.text(`Tel: ${config.phone}`, centerX, y, { align: 'center' });
       y += 8;
       
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('TICKET DE VENTA', centerX, y, { align: 'center' });
+      doc.text(config.ticketSettings?.headerText || 'TICKET DE VENTA', centerX, y, { align: 'center' });
       y += 2;
       doc.setLineWidth(0.1);
       doc.line(margin, y, pageWidth - margin, y);
@@ -453,9 +569,8 @@ export default function App() {
       y += 12;
       doc.setFontSize(7);
       doc.setFont('helvetica', 'italic');
-      doc.text('¡Gracias por su compra!', centerX, y, { align: 'center' });
-      y += 4;
-      doc.text('Nexus POS Pro - www.nexuspos.com', centerX, y, { align: 'center' });
+      const footerLines = doc.splitTextToSize(config.ticketSettings?.footerText || '¡Gracias por su compra!', pageWidth - 10);
+      doc.text(footerLines, centerX, y, { align: 'center' });
 
     } else {
       // --- A4 Professional Invoice Design ---
@@ -889,24 +1004,111 @@ export default function App() {
               </div>
             )}
 
-            <div className="relative group cursor-pointer">
-              <Bell size={20} className="text-app-muted group-hover:text-app-primary transition-colors" />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
-                  {notifications.length}
-                </span>
-              )}
+            <div className="relative group cursor-pointer" onClick={() => setIsInfoModalOpen(true)}>
+              <div className="w-8 h-8 rounded-full bg-app-main border border-app flex items-center justify-center text-app-muted hover:text-app-primary hover:border-app-primary transition-all">
+                <span className="font-bold text-sm">?</span>
+              </div>
+            </div>
+
+            <div className="relative group">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="relative p-2 rounded-xl hover:bg-app-main transition-all"
+              >
+                <Bell size={20} className={cn(
+                  "text-app-muted transition-colors",
+                  notifications.length > 0 ? "animate-bounce text-rose-500" : "group-hover:text-app-primary"
+                )} />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isNotificationsOpen && (
+                  <>
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setIsNotificationsOpen(false)}
+                      className="fixed inset-0 z-40"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-2 w-80 bg-app-card border border-app rounded-2xl shadow-2xl z-50 overflow-hidden"
+                    >
+                      <div className="p-4 border-b border-app bg-app-main flex justify-between items-center">
+                        <h4 className="font-bold text-app-main text-sm">Notificaciones</h4>
+                        <button 
+                          onClick={() => setNotifications([])}
+                          className="text-[10px] font-bold text-app-primary hover:underline"
+                        >
+                          Limpiar todo
+                        </button>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <Bell size={32} className="mx-auto text-app-muted opacity-20 mb-2" />
+                            <p className="text-xs text-app-muted font-medium">No tienes notificaciones</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y border-app">
+                            {notifications.map(n => (
+                              <div key={n.id} className="p-4 hover:bg-app-main transition-all group">
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className={cn(
+                                      "text-xs font-bold",
+                                      n.type === 'error' ? 'text-rose-500' :
+                                      n.type === 'warning' ? 'text-amber-500' :
+                                      n.type === 'success' ? 'text-emerald-500' : 'text-app-primary'
+                                    )}>
+                                      {n.title}
+                                    </h5>
+                                    <p className="text-[10px] text-app-muted mt-1 leading-relaxed">{n.message}</p>
+                                    <span className="text-[8px] text-app-muted font-bold uppercase mt-2 block">
+                                      {format(n.timestamp, 'HH:mm')}
+                                    </span>
+                                  </div>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setNotifications(prev => prev.filter(notif => notif.id !== n.id));
+                                    }}
+                                    className="p-1 text-app-muted hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
 
             <div className="h-8 w-px bg-app" />
 
             <div className="flex items-center gap-4">
               <div className="hidden md:flex flex-col items-right text-right">
-                <p className="text-sm font-bold text-app-main">{currentUser.name}</p>
-                <p className="text-[10px] font-bold text-app-primary uppercase tracking-widest">{currentUser.role}</p>
+                <p className="text-sm font-bold text-app-main">{currentUser.name} {currentUser.lastName || ''}</p>
               </div>
-              <div className="w-10 h-10 bg-app-primary text-white rounded-full border-2 border-app shadow-sm flex items-center justify-center font-black">
-                {currentUser.name.charAt(0)}
+              <div className="w-10 h-10 bg-app-primary text-white rounded-full border-2 border-app shadow-sm flex items-center justify-center font-black overflow-hidden">
+                {currentUser.avatar ? (
+                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  currentUser.name.charAt(0)
+                )}
               </div>
             </div>
           </div>
@@ -1082,16 +1284,6 @@ export default function App() {
                   onDeleteClient={(id) => setClients(prev => prev.filter(item => item.id !== id))}
                 />
               )}
-              {activeTab === 'expenses' && (
-                <ExpensesView 
-                  expenses={expenses}
-                  onAddExpense={(e) => setExpenses(prev => [...prev, e])}
-                  onDeleteExpense={(id) => setExpenses(prev => prev.filter(item => item.id !== id))}
-                  onGenerateReport={generateFinancialReportPDF}
-                  reportFilters={reportFilters}
-                  setReportFilters={setReportFilters}
-                />
-              )}
               {activeTab === 'partners' && (
                 <PartnersView 
                   partners={partners}
@@ -1107,7 +1299,7 @@ export default function App() {
                       <HistoryIcon size={20} className="text-app-primary" />
                       Filtros de Historial
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-app-muted uppercase">Cliente</label>
                         <select 
@@ -1137,20 +1329,26 @@ export default function App() {
                           className="w-full px-4 py-2 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all text-sm"
                         />
                       </div>
-                      <div className="flex items-end gap-2">
-                        <button 
-                          onClick={() => generateHistoryPDF(filteredHistory, 'Historial Filtrado')}
-                          className="flex-1 py-2 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all text-sm flex items-center justify-center gap-2"
-                        >
-                          <Download size={16} /> PDF Filtrado
-                        </button>
-                        <button 
-                          onClick={() => generateHistoryPDF(sales, 'Historial Completo')}
-                          className="flex-1 py-2 bg-app-card text-app-main border border-app font-bold rounded-xl hover:bg-app-main transition-all text-sm flex items-center justify-center gap-2"
-                        >
-                          <Download size={16} /> PDF Completo
-                        </button>
-                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button 
+                        onClick={() => setIsExpensesModalOpen(true)}
+                        className="px-6 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20"
+                      >
+                        <Wallet size={16} /> Gestionar Egresos
+                      </button>
+                      <button 
+                        onClick={() => generateHistoryPDF(filteredHistory, 'Historial Filtrado')}
+                        className="px-6 py-2 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-app-primary/20"
+                      >
+                        <Download size={16} /> PDF Filtrado
+                      </button>
+                      <button 
+                        onClick={() => generateHistoryPDF(sales, 'Historial Completo')}
+                        className="px-6 py-2 bg-app-card text-app-main border border-app font-bold rounded-xl hover:bg-app-main transition-all text-sm flex items-center justify-center gap-2"
+                      >
+                        <Download size={16} /> PDF Completo
+                      </button>
                     </div>
                   </div>
 
@@ -1200,6 +1398,7 @@ export default function App() {
                   config={config}
                   setConfig={setConfig}
                   users={users}
+                  currentUser={currentUser}
                   onAddUser={(u) => {
                     setUsers(prev => {
                       const exists = prev.find(user => user.id === u.id);
@@ -1224,6 +1423,84 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+
+      <AnimatePresence>
+        {isExpensesModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 md:p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-app-card w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 bg-app-primary text-white flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <Wallet size={24} />
+                  <h3 className="text-xl font-bold">Gestión de Egresos</h3>
+                </div>
+                <button onClick={() => setIsExpensesModalOpen(false)} className="hover:bg-white/20 p-2 rounded-xl transition-all">
+                  <Plus className="rotate-45" size={24} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto">
+                <ExpensesView 
+                  expenses={expenses}
+                  onAddExpense={(e) => setExpenses(prev => [...prev, e])}
+                  onDeleteExpense={(id) => setExpenses(prev => prev.filter(item => item.id !== id))}
+                  onGenerateReport={generateFinancialReportPDF}
+                  reportFilters={reportFilters}
+                  setReportFilters={setReportFilters}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isInfoModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-app-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 text-center space-y-6">
+                <div className="w-20 h-20 bg-app-primary-light text-app-primary rounded-3xl flex items-center justify-center mx-auto">
+                  <span className="text-4xl font-black">?</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-app-main">Información del Sistema</h3>
+                  <p className="text-sm text-app-muted mt-2">Creado por <span className="font-bold text-app-main">Luigui Carlo Arata V.</span></p>
+                </div>
+                
+                <div className="flex justify-center gap-6 pt-4">
+                  <a href="https://www.facebook.com/profile.php?id=61584020012816" target="_blank" rel="noopener noreferrer" className="text-app-muted hover:text-[#1877F2] transition-colors">
+                    <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  </a>
+                  <a href="https://www.instagram.com/possolutiongroup" target="_blank" rel="noopener noreferrer" className="text-app-muted hover:text-[#E4405F] transition-colors">
+                    <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                  </a>
+                  <a href="https://www.tiktok.com/@possolutiongroup" target="_blank" rel="noopener noreferrer" className="text-app-muted hover:text-black transition-colors">
+                    <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.86-.6-4.12-1.31a6.417 6.417 0 01-1.87-1.55v7.36c.03 3.47-2.23 6.7-5.58 7.61-2.9.77-6.07-.18-8.13-2.34-2.21-2.3-2.74-5.91-1.36-8.71 1.14-2.4 3.54-4.04 6.2-4.15l.02 4.05c-1.39.07-2.74.82-3.46 2.01-.87 1.41-.79 3.39.21 4.68 1.06 1.36 2.91 1.96 4.6 1.5 1.53-.4 2.71-1.75 2.71-3.33V0h-.01z"/></svg>
+                  </a>
+                  <a href="https://wa.me/51953812626" target="_blank" rel="noopener noreferrer" className="text-app-muted hover:text-[#25D366] transition-colors">
+                    <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                  </a>
+                </div>
+
+                <button 
+                  onClick={() => setIsInfoModalOpen(false)}
+                  className="w-full py-3 bg-app-primary text-white font-bold rounded-xl hover:bg-app-primary-hover transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

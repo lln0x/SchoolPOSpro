@@ -48,6 +48,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [deleteStep, setDeleteStep] = useState<'confirm' | 'action' | 'move'>('confirm');
   const [targetCategoryId, setTargetCategoryId] = useState('');
 
+  // Keyboard Shortcuts
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsModalOpen(false);
+        setIsCategoryModalOpen(false);
+        setCategoryToDelete(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Product Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',

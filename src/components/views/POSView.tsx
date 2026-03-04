@@ -59,7 +59,7 @@ export const POSView: React.FC<POSViewProps> = ({
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [selectedPrintFormat, setSelectedPrintFormat] = useState<'80mm' | '58mm' | 'A4'>('80mm');
+  const [selectedPrintFormat, setSelectedPrintFormat] = useState<'80mm' | '58mm' | 'A4' | 'None'>('80mm');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [configuringCombo, setConfiguringCombo] = useState<Product | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, string[]>>({});
@@ -113,6 +113,55 @@ export const POSView: React.FC<POSViewProps> = ({
       setFeeDetails(prev => ({ ...prev, month: availableMonths[0] || MONTHS[currentMonthIndex] }));
     }
   }, [availableMonths, feeDetails.month, currentMonthIndex]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Shift + Y: Select Yape/Plin
+      if (e.shiftKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        setPaymentMethod('Mobile');
+      }
+      // Shift + E: Efectivo
+      if (e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setPaymentMethod('Cash');
+      }
+      // Shift + T: Tarjeta
+      if (e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setPaymentMethod('Card');
+      }
+      // Shift + B: Transferencia
+      if (e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setPaymentMethod('Bank');
+      }
+      // Shift + C: Cobrar
+      if (e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        if (cart.length > 0) {
+          setPaymentAmount(cartTotal);
+          setIsCheckoutModalOpen(true);
+        }
+      }
+      // Esc: Close modals
+      if (e.key === 'Escape') {
+        setIsCheckoutModalOpen(false);
+        setIsClientModalOpen(false);
+        setConfiguringCombo(null);
+        setFeeModalProduct(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart.length, cartTotal]);
 
   const filteredProducts = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -195,7 +244,7 @@ export const POSView: React.FC<POSViewProps> = ({
   const changeAmount = Math.max(0, paymentAmount - cartTotal);
 
   const handleFinalizeSale = () => {
-    onProcessSale(selectedPrintFormat);
+    onProcessSale(selectedPrintFormat === 'None' ? undefined : selectedPrintFormat);
     setIsCheckoutModalOpen(false);
     setPaymentAmount(0);
   };
@@ -666,6 +715,36 @@ export const POSView: React.FC<POSViewProps> = ({
           >
             Cobrar {formatCurrency(cartTotal)}
           </motion.button>
+
+          <div className="mt-4 p-4 bg-app-card rounded-2xl border border-app">
+            <h4 className="text-[10px] font-bold text-app-muted uppercase tracking-widest mb-3">Atajos de Teclado (SHIFT +)</h4>
+            <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Cobrar</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">C</kbd>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Yape/Plin</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">Y</kbd>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Efectivo</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">E</kbd>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Tarjeta</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">T</kbd>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Transferencia</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">B</kbd>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">Cerrar</span>
+                <kbd className="px-1.5 py-0.5 bg-app-main border border-app rounded text-[10px] font-bold text-app-primary">ESC</kbd>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -963,19 +1042,24 @@ export const POSView: React.FC<POSViewProps> = ({
 
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-app-muted uppercase">Formato de Impresión</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['58mm', '80mm', 'A4'].map(format => (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: '58mm', label: '58mm' },
+                      { id: '80mm', label: '80mm' },
+                      { id: 'A4', label: 'A4' },
+                      { id: 'None', label: 'No imprimir' }
+                    ].map(format => (
                       <button
-                        key={format}
-                        onClick={() => setSelectedPrintFormat(format as any)}
+                        key={format.id}
+                        onClick={() => setSelectedPrintFormat(format.id as any)}
                         className={cn(
                           "py-3 rounded-xl text-xs font-bold border transition-all",
-                          selectedPrintFormat === format 
+                          selectedPrintFormat === format.id 
                             ? "bg-app-primary text-white border-app-primary shadow-md" 
                             : "bg-app-card text-app-muted border-app hover:bg-app-main"
                         )}
                       >
-                        {format}
+                        {format.label}
                       </button>
                     ))}
                   </div>
