@@ -675,7 +675,7 @@ export default function App() {
       y += 7;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text('TOTAL A PAGAR:', totalsX, y);
+      doc.text('TOTAL:', totalsX, y);
       doc.text(formatCurrency(sale.total), pageWidth - margin, y, { align: 'right' });
 
       // Footer
@@ -807,7 +807,7 @@ export default function App() {
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Total Acumulado:`, 140, finalY);
+    doc.text(`TOTAL:`, 140, finalY);
     doc.text(`${formatCurrency(total)}`, 200, finalY, { align: 'right' });
 
     doc.save(`historial-${format(new Date(), 'yyyyMMdd-HHmm')}.pdf`);
@@ -865,9 +865,9 @@ export default function App() {
       startY: 60,
       head: [['Concepto', 'Monto']],
       body: [
-        ['Total Ingresos (Ventas)', formatCurrency(reportRevenue)],
-        ['Total Egresos (Gastos)', formatCurrency(reportExpenses)],
-        ['Balance Neto (Ganancia Real)', formatCurrency(reportNetProfit)]
+        ['INGRESOS (VENTAS)', formatCurrency(reportRevenue)],
+        ['EGRESOS (GASTOS)', formatCurrency(reportExpenses)],
+        ['GANANCIA NETA', formatCurrency(reportNetProfit)]
       ],
       theme: 'striped',
       headStyles: { fillColor: [99, 102, 241], textColor: 255 },
@@ -904,7 +904,7 @@ export default function App() {
   };
 
   const [historyFilters, setHistoryFilters] = useState({
-    clientId: '',
+    clientSearch: '',
     startDate: '',
     endDate: ''
   });
@@ -937,13 +937,17 @@ export default function App() {
 
   const filteredHistory = useMemo(() => {
     return sales.filter(sale => {
-      const matchesClient = historyFilters.clientId === '' || sale.clientId === historyFilters.clientId;
+      const search = historyFilters.clientSearch.toLowerCase();
+      const matchesClient = search === '' || 
+        sale.clientName.toLowerCase().includes(search) || 
+        (clients.find(c => c.id === sale.clientId)?.document || '').includes(search);
+      
       const saleDate = new Date(sale.date);
       const matchesStart = historyFilters.startDate === '' || saleDate >= new Date(historyFilters.startDate);
       const matchesEnd = historyFilters.endDate === '' || saleDate <= new Date(historyFilters.endDate + 'T23:59:59');
       return matchesClient && matchesStart && matchesEnd;
     });
-  }, [sales, historyFilters]);
+  }, [sales, historyFilters, clients]);
 
   if (!currentUser) {
     return (
@@ -1301,15 +1305,14 @@ export default function App() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-app-muted uppercase">Cliente</label>
-                        <select 
-                          value={historyFilters.clientId}
-                          onChange={e => setHistoryFilters({...historyFilters, clientId: e.target.value})}
+                        <label className="text-[10px] font-bold text-app-muted uppercase">Buscar Cliente (Nombre o DNI)</label>
+                        <input 
+                          type="text"
+                          value={historyFilters.clientSearch}
+                          onChange={e => setHistoryFilters({...historyFilters, clientSearch: e.target.value})}
+                          placeholder="Ej. Juan Perez o 70123456"
                           className="w-full px-4 py-2 bg-app-main border-none rounded-xl focus:ring-2 focus:ring-app-primary transition-all text-sm"
-                        >
-                          <option value="">Todos los clientes</option>
-                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-app-muted uppercase">Desde</label>
